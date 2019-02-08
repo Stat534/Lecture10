@@ -1,0 +1,76 @@
+---
+title: "Lecture 10: Point Level Models - Model Fitting, cont.."
+output:
+  revealjs::revealjs_presentation:
+    theme: night
+    center: true
+    transition: none
+    incremental: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+library(ggplot2)
+library(dplyr)
+library(mnormt)
+library(gstat)
+library(sp)
+```
+
+# Class Intro
+
+## Intro Questions 
+- Discuss how the spatial range could be extended to $\mathcal{R}^2$ rather than $\mathcal{R}^1$ in the Gaussian Process setting. What changes in this situation?
+- For Today:
+    - More Model Fitting
+
+
+## Universal Kriging
+- When covariate information is available for inclusion in the analysis, this is often referred to as *universal kriging*
+- Now we have $$\boldsymbol{Y} = X \boldsymbol{\beta} + \boldsymbol{\epsilon}, \; \; \text{ where } \boldsymbol{\epsilon} \sim N(\boldsymbol{0}, \Sigma)$$
+- The conditional distributions are very similar to what we have derived above, watch for HW question.
+
+- In each case, kriging or universal kriging, it is still necessary to estimate the following parameters: $\sigma^2,$ $\tau^2$, $\phi$, and $\mu$ or $\beta$.
+- This can be done with least-squares methods or in a Bayesian framework.
+
+
+# Parameter Estimation
+
+## About those other parameters
+
+We still need
+
+- to choose an appropriate covariance function (or semivariogram)
+- and estimate parameters in that function
+
+
+## Functions in R for 2D kriging
+- The `krige` function in `gstat` contains a function for kriging ; however, again this requires a known variogram.
+
+```{r, eval = F, echo = T }
+data(meuse)
+coordinates(meuse) = ~x +y
+data(meuse.grid)
+gridded(meuse.grid) = ~x + y
+m <- vgm(.59, "Sph", 874, .04)
+# ordinary kriging:
+x <- krige(log(zinc)~1, meuse, meuse.grid, model = m)
+spplot(x["var1.pred"], main = "ordinary kriging predictions")
+```
+
+## Functions in R for 2D kriging
+- The `krige` function in `gstat` contains a function for kriging ; however, again this requires a known variogram.
+
+```{r, eval = T, message = F}
+data(meuse)
+coordinates(meuse) = ~x +y
+data(meuse.grid)
+gridded(meuse.grid) = ~x + y
+m <- vgm(.59, "Sph", 874, .04)
+# ordinary kriging:
+x <- krige(log(zinc)~1, meuse, meuse.grid, model = m)
+spplot(x["var1.pred"], main = "ordinary kriging predictions")
+```
+
+## 
