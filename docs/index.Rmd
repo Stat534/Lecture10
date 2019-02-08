@@ -16,6 +16,8 @@ library(dplyr)
 library(mnormt)
 library(gstat)
 library(sp)
+library(geoR)
+library(spBayes)
 ```
 
 # Class Intro
@@ -73,4 +75,95 @@ x <- krige(log(zinc)~1, meuse, meuse.grid, model = m)
 spplot(x["var1.pred"], main = "ordinary kriging predictions")
 ```
 
-## 
+## 2D Simulation
+
+```{r}
+set.seed(02082019)
+num.pts <- 1000
+sigma.sq <- 1
+tau.sq <- .10
+phi <- 1
+x1 <- runif(num.pts, max = 10)
+x2 <- runif(num.pts, max = 10)
+d <- dist(cbind(x1,x2), upper=T, diag = T) %>% as.matrix()
+Omega <- sigma.sq * exp(-d * phi) + tau.sq * diag(num.pts)
+y = rmnorm(1, 0, Omega)
+GP.dat <- data.frame(x1 = x1, x2 = x2, y = y)
+
+GP.dat %>% ggplot(aes(x=x1, y = x2, z=y)) + geom_point(aes(color=y)) +   scale_colour_gradient2() + theme_dark()
+```
+
+## Variogram Fitting: Optimization to Empirical Variogram
+
+```{r}
+# Default Values for Variogram
+emp.vario <- variog(coords= GP.dat %>% select(x1,x2), data = GP.dat %>% select(y), messages=F)
+plot(emp.vario)
+variofit(emp.vario, cov.model = 'exponential')
+```
+
+## Variogram Fitting: Optimization to Empirical Variogram
+
+```{r}
+# More bins in Empirical Variogram
+max.dist <- .5 * max(iDist(GP.dat %>% select(x1,x2)))
+bins <- 50
+emp.vario2 <- variog(coords= GP.dat %>% select(x1,x2), data = GP.dat %>% select(y), uvec = (seq(0, max.dist, length = bins)), messages = F)
+plot(emp.vario2)
+variofit(emp.vario2, cov.model = 'exponential')
+```
+
+## Variogram Fitting: Exercise
+
+Write code to simulate spatial processes with an exponential covariance function and evaluate the fitted values for the parameters. Vary the following parameters: number of samples (25, 100, 500) and replicate each 10 times. Discuss how close the fitted samples are to the true values.
+
+
+## Variogram Fitting: Solution $\sigma^2$
+
+```{r}
+num.pts <- 1000
+sigma.sq <- 1
+tau.sq <- .5
+phi <- 1
+sim_exp <- function(num.pts, sigma.sq, tau.sq, phi){
+  # function to generate spatial process with exponential covariance
+  # ARGS: num.pts = number of samples
+  #     : sigma.sq, tau.sq, phi are parameters in covariance
+  # RETURNS: data frame with x and y coordinates plus response (z)
+  x <- runif(num.pts, max = 10)
+  y <- runif(num.pts, max = 10)
+  d <- dist(cbind(x,y), upper=T, diag = T) %>% as.matrix()
+  Omega <- sigma.sq * exp(-d * phi) + tau.sq * diag(num.pts)
+  z = rmnorm(1, 0, Omega)
+  return(data.frame(x = x, y = y, z = z))
+}
+
+vario_calc <- function(num.pts, sigma.sq, tau.sq, phi){
+  # Function to fit variogram to synthetic data
+  # ARGS: num.pts = number of samples
+  #     : sigma.sq, tau.sq, phi are parameters in covariance
+  # RETURNS: data frame with x and y coordinates plus response (z)
+  dat <- sim_exp(num.pts, sigma.sq, tau.sq, phi)
+  max.dist <- .5 * max(iDist(dat %>% select(x,y)))
+  bins <- 50
+  emp.vario <- variog(coords= dat %>% select(x,y), data = dat %>% select(z), uvec = (seq(0, max.dist, length = bins)), messages = F)
+  fit.vario <- variofit(emp.vario, cov.model = 'exponential', messages=F)
+  return(data.frame(num.pts = num.pts, sigma.sq = fit.vario$cov.pars[1], tau.sq= fit.vario$nugget, phi= fit.vario$cov.pars[2]))
+}
+summary <- replicate(100,vario_calc(num.pts=25, sigma.sq, tau.sq, phi), simplify = 'matrix') %>% t() %>% as_tibble() %>% bind_rows(replicate(100,vario_calc(num.pts=100, sigma.sq, tau.sq, phi), simplify = 'matrix') %>% t() %>% as.data.frame()) %>%
+  bind_rows(replicate(100,vario_calc(num.pts=500, sigma.sq, tau.sq, phi), simplify = 'matrix') %>% t() %>% as.data.frame()) %>% apply(2,FUN = as.numeric) %>% as_tibble() 
+
+
+summary %>% mutate(num.pts = as.factor(num.pts)) %>% ggplot(aes(y=sigma.sq, x = num.pts)) + geom_violin(aes(group=num.pts), draw_quantiles = c( 0.5)) + ylim(0, 10* sigma.sq) +  annotate("segment", x = 0, xend = 4, y = sigma.sq, yend = sigma.sq, colour = "blue")
+```
+
+## Variogram Fitting: Solution $\tau^2$
+```{r}
+summary %>% mutate(num.pts = as.factor(num.pts)) %>% ggplot(aes(y=tau.sq, x = num.pts)) + geom_violin(aes(group=num.pts), draw_quantiles = c( 0.5)) +  annotate("segment", x = 0, xend = 4, y = tau.sq, yend = tau.sq, colour = "blue")
+```
+
+## Variogram Fitting: Solution $\phi$
+```{r}
+summary %>% mutate(num.pts = as.factor(num.pts)) %>% ggplot(aes(y=phi, x = num.pts)) + geom_violin(aes(group=num.pts), draw_quantiles = c( 0.5)) +  ylim(0, 10* phi) + annotate("segment", x = 0, xend = 4, y = phi, yend = phi, colour = "blue")
+```
+
