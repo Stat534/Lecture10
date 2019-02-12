@@ -2,7 +2,7 @@
 title: "Lecture 10: Point Level Models - Model Fitting, cont.."
 output:
   revealjs::revealjs_presentation:
-    theme: night
+    theme: white
     center: true
     transition: none
     incremental: true
