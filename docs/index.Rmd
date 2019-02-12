@@ -26,6 +26,7 @@ library(spBayes)
 - Discuss how the spatial range could be extended to $\mathcal{R}^2$ rather than $\mathcal{R}^1$ in the Gaussian Process setting. What changes in this situation?
 - For Today:
     - More Model Fitting
+    - Hierarchical Models Intro
 
 
 ## Universal Kriging
@@ -76,7 +77,7 @@ spplot(x["var1.pred"], main = "ordinary kriging predictions")
 ```
 
 ## 2D Simulation
-
+- Using the simulated spatial process, plot an empirical variogram.
 ```{r}
 set.seed(02082019)
 num.pts <- 1000
@@ -115,7 +116,8 @@ variofit(emp.vario2, cov.model = 'exponential')
 
 ## Variogram Fitting: Exercise
 
-Write code to simulate spatial processes with an exponential covariance function and evaluate the fitted values for the parameters. Vary the following parameters: number of samples (25, 100, 500) and replicate each 10 times. Discuss how close the fitted samples are to the true values.
+>- Write code to simulate spatial processes with an exponential covariance function and evaluate the fitted values for the parameters. 
+>- Vary the following parameters: number of samples (25, 100, 500) and replicate each 10 times. Discuss how close the fitted samples are to the true values.
 
 
 ## Variogram Fitting: Solution $\sigma^2$
@@ -167,3 +169,158 @@ summary %>% mutate(num.pts = as.factor(num.pts)) %>% ggplot(aes(y=tau.sq, x = nu
 summary %>% mutate(num.pts = as.factor(num.pts)) %>% ggplot(aes(y=phi, x = num.pts)) + geom_violin(aes(group=num.pts), draw_quantiles = c( 0.5)) +  ylim(0, 10* phi) + annotate("segment", x = 0, xend = 4, y = phi, yend = phi, colour = "blue")
 ```
 
+# Hierarchical Modeling for Point Referenced Data
+
+## Spatial Process Theory
+
+- Specifying a spatial process is concerned with a collection of random variables ${Y(\boldsymbol{s}):\boldsymbol{s} \in \mathcal{R}^2}$
+- Recall, $\boldsymbol{s} \in \mathcal{R}^2$ requires an infinite dimensional distribution.
+- This is typically acheived using a Gaussian process, which enables use of a multivariate normal distribution and only requires specifying the mean and covariance function.
+
+## Gaussian Process
+
+- In practice, the process is only observed at a finite number of locations, $\{\boldsymbol{s_1}, \dots, \boldsymbol{s_n}\}$
+- Using $\{Y(\boldsymbol{s_1}), \dots, Y(\boldsymbol{s_n})\}$ the goal is to learn the mean and covariance structure of the latent spatial process using observed data
+- *and* make predictions of $Y(\boldsymbol{s_0})$
+- A common statisical modeling approach uses Bayesian hierarchical models
+
+## Connections and Asymptotics
+
+-  This is quite similar to dynamic linear models where there is a latent state-space specification.
+- Asymptotics focuses on the convergence of estimators with large samples. In spatial statistics, asymptotics are focused on spatial infill. That is, considering the properties of the estimators as the distance between the points goes to zero.
+
+## Bayesian Statistics Overview: Sampling Model
+
+>- Bayesian statistics assumes that the unknown parameters are a random variable - in addition to observed data.
+- As with classical statistical techniques, fitting a model requires specifying the statistical distribution for the observed data $\boldsymbol{y} = \{y_1, \dots, y_n\}$ given parameters
+$\boldsymbol{\theta}$, denoted as $p(\boldsymbol{y}|\boldsymbol{\theta})$.
+- $p(\boldsymbol{y}|\boldsymbol{\theta})$ is often referred to as a sampling model.
+- For instance, with a regression model, $$\boldsymbol{y}|\boldsymbol{\beta}, \boldsymbol{x} \sim ??$$
+
+## Bayesian Statistics Overview: Sampling Model
+ 
+- With a regression model, typically the residuals are assumed to follow a  normal distribution.
+$$\boldsymbol{Y_i} = {\boldsymbol{\beta}}^T x_i + \boldsymbol{\epsilon_i}, \; \;\boldsymbol{\epsilon_i} \sim N(0, \sigma^2)$$
+Hence, 
+$$\boldsymbol{y}|\boldsymbol{\beta}, \boldsymbol{x} \sim N(X\boldsymbol{\beta}, \sigma^2 I)$$
+- In regression, the goal is to make inferences about the parameters $\boldsymbol{\theta} = \{\boldsymbol{\beta}, \sigma^2\}$
+
+## Bayesian Statistics Overview: Prior Distribution
+
+>- Inference in Bayesian statistics is distributional, rather than a single point.
+
+- Distributional beliefs are iteratively updated in the presence of new data
+
+- A prior distribution, $p(\boldsymbol{\theta}|\boldsymbol{\lambda})$ is the belief about the parameters($\boldsymbol{\theta}$) before collecting data.
+
+- A set of hyperparameters, $\boldsymbol{\lambda}$ can be used to define the prior distribution.
+
+## Bayesian Statistics Overview: Prior Distribution
+
+>- Assume we are interested in learning the relationship between the cost of a pizza in Bozeman and the number of slices in that pizza.
+
+- Write out and specify a sampling model for this regression problem.
+
+- Sketch and/or define a prior distribution for your parameters in the sampling model.
+
+## Bayesian Statistics Overview: Prior Distribution for Pizza
+
+```{r}
+prior.mean <- 2
+prior.var <- 1
+
+x <- seq(0,4, by = .01)
+plot(x,dnorm(x, mean = prior.mean, sd = sqrt(prior.var)), xlab = 'dollars per slice', ylab = '', type = 'l', main = 'Prior Distribution', ylim = c(0,.65))
+```
+
+
+## Bayesian Statistics Overview: Posterior Distribution
+- The combination of the prior distribution, which is then updated after observing data, results in the posterior distribution.
+- Inference about the parameters is based on the posterior distribution.
+- Ignoring $\boldsymbol{\lambda}$ for now, the posterior distribution is defined as
+$$p(\boldsymbol{\theta}|\boldsymbol{y}) = \frac{p(\boldsymbol{y},\boldsymbol{\theta})}{p(\boldsymbol{y})} = \frac{p(\boldsymbol{y},\boldsymbol{\theta})}{\int p(\boldsymbol{y},\boldsymbol{\theta}) d \theta} = \frac{\mathcal{L}(\boldsymbol{\theta}|\boldsymbol{y})p(\boldsymbol{\theta})}{\int \mathcal{L}(\boldsymbol{\theta}|\boldsymbol{y})p(\boldsymbol{\theta}) d \theta}$$
+
+## Bayesian Statistics Overview: Posterior Distribution for Pizza
+
+- We observe a data point where a pizza with 8 slices sells for \$12.
+```{r}
+prior.mean <- 2
+prior.var <- 1
+process.var <- 1
+
+y <- 12 / 8
+post.var <- 1 / (1/ process.var + 1 / prior.var) 
+post.mean <- post.var * (y/ process.var + prior.mean / prior.var) 
+x <- seq(0,4, by = .01)
+plot(x,dnorm(x, mean = prior.mean, sd = sqrt(prior.var)), xlab = 'dollars per slice', ylab = '', type = 'l', main = 'Prior Distribution with Posterior', ylim = c(0,.65))
+lines(x, dnorm(x,mean = post.mean, sd = sqrt(post.var)), col='red', lty=2)
+legend('topright',legend = c('prior','posterior'), col = c('black','red'), lty = 1:2)
+```
+
+## Bayesian Statistics Overview: Hierachical Posterior Distribution
+
+- Recall that $\boldsymbol{\lambda}$ are hyperparameters in the prior distribution $p(\boldsymbol{\theta}|\boldsymbol{\lambda})$.
+- For instance, we might say that $\theta|\lambda \sim N(\lambda,1)$
+- Then we also need prior distributions (hyperpriors) for $\lambda$, $p(\lambda)$
+- Then the posterior is 
+$$p(\boldsymbol{\theta}|\boldsymbol{y}) = \frac{p(\boldsymbol{y},\boldsymbol{\theta})}{p(\boldsymbol{y})} =  \frac{\mathcal{L}(\boldsymbol{\theta}|\boldsymbol{y})p(\boldsymbol{\theta}|\boldsymbol{\lambda})p(\boldsymbol{\lambda})}{\int \int \mathcal{L}(\boldsymbol{\theta}|\boldsymbol{y})p(\boldsymbol{\theta}|\boldsymbol{\lambda})p(\boldsymbol{\lambda})d \boldsymbol{\theta} d \boldsymbol{\lambda}}$$
+
+## Hierarchical Model
+
+There are three levels of this (hierarchical) model
+
+1. $p(\boldsymbol{y}|\boldsymbol{\theta})$ [data | process]
+2. $p(\boldsymbol{\theta}|\boldsymbol{\lambda})$ [process | parameters]
+3. $p(\boldsymbol{\lambda})$ [parameters]
+
+## More about Bayes
+
+Bannerjee, Geland, and Carlin state, "Bayesian inferential paradigm offers potentially attractive advantages over the classical, frequentist statistical approach through 
+
+- its more philosophically sound foundation,
+- its unified approach to data analysis,
+- and its ability to incorporate prior opinion via the prior distribution.
+
+## Stationary Spatial Process
+
+-The model for a Gaussian process can be written as
+$$Y(\boldsymbol{s}) = \mu(\boldsymbol{s}) + w(\boldsymbol{s}) + \epsilon(\boldsymbol{s}),$$
+where $\mu(\boldsymbol{s}) = x(\boldsymbol{s})^t\boldsymbol{\beta}$ is the mean structure. Then the residual can be partitioned into two pieces: a spatial component $w(\boldsymbol{s})$ and a non-spatial component $\epsilon(\boldsymbol{s}).$
+
+- We assume $w(\boldsymbol{s})$ are realizations from a Gaussian Process (GP) with mean zero that models residual spatial structure.
+
+- Then $\epsilon(\boldsymbol{s})$ are uncorrelated error terms.
+
+- _Q:_ how do $w(\boldsymbol{s})$ + $\epsilon(\boldsymbol{s})$ relate to the partial sill, range, and nugget?
+
+## $w(\boldsymbol{s})$ and $\epsilon(\boldsymbol{s})$
+- The partial sill, $\sigma^2$, and the range, $\phi$, are modeled with $w(\boldsymbol{s})$
+- The nugget is contained in the $\epsilon(\boldsymbol{s})$ term.
+- This model assumes a stationary model - in that the correlation is only a function of the separation between points.
+- Furthermore, if the correlation is only a function of the distance between points, this is also isotropic.
+
+## Model Specification
+
+- Let $\Sigma = \sigma^2 H(\phi) + \tau^2 I$
+- Define $\boldsymbol{\theta} = (\boldsymbol{\beta}, \sigma^2, \tau^2, \phi)$
+- Then the sampling model can be written as:
+- $\boldsymbol{Y}| \boldsymbol{\theta} \sim N(X \boldsymbol{\beta}, \sigma^2 H(\phi) + \tau^2)$
+- Given a (set of) prior distribution(s), $p(\theta)$, the posterior distribution of the parameters can be computed (more later) as $p(\theta|\boldsymbol{y})$.
+
+## Model Specification as Hierarchical Model
+
+- The model can be rewritten as
+$$\boldsymbol{Y}| \boldsymbol{\theta}, \boldsymbol{W} \sim N(X \boldsymbol{\beta} + \boldsymbol{W}, \tau^2 I), \; \;\;\;\;\; \text{ [data|process, parameters]}$$
+where $\boldsymbol{W} = (w(\boldsymbol{s_1}), \dots , w(\boldsymbol{s_1}))^T$ is a vector of spatial random effects.
+- The second-stage, or the process, is 
+$$\boldsymbol{W}|\sigma^2, \phi \sim N(\boldsymbol{0},\sigma^2 H(\phi))\; \;\;\;\;\; \text{ [process | parameters]}$$
+- The third level is the prior specification: $p(\theta)$ [parameters]
+
+## What about those prior distributions??
+
+Next, prior distributions are necessary for
+
+- $\boldsymbol{\beta}$
+- $\sigma^2$
+- $\phi$
+- $\tau^2$
